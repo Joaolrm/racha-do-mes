@@ -41,8 +41,8 @@ async function bootstrap() {
     .addServer(process.env.API_URL || 'http://localhost:3000', 'Servidor Local')
     .setContact(
       'João Luís Rosa de Moura',
-      'https://github.com/joaoluis',
-      'contato@example.com',
+      'https://github.com/Joaolrm',
+      'jlluismr86@gmail.com',
     )
     .setLicense('MIT', 'https://opensource.org/licenses/MIT')
     .build();

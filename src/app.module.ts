@@ -36,7 +36,7 @@ import { JwtAuthGuard } from './auth/jwt-auth.guard';
       password: process.env.DB_PASSWORD || 'postgres',
       database: process.env.DB_DATABASE || 'racha_do_mes',
       entities: [User, Bill, UserBill, Payment, ActualBalance, HistoryBalance],
-      synchronize: process.env.NODE_ENV !== 'production', // Apenas em desenvolvimento
+      synchronize: process.env.NODE_ENV !== 'production',
       logging: process.env.NODE_ENV === 'development',
     }),
     AuthModule,

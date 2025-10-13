@@ -14,7 +14,7 @@ export async function runSeed() {
     port: parseInt(process.env.DB_PORT, 10) || 5432,
     username: process.env.DB_USERNAME || 'postgres',
     password: process.env.DB_PASSWORD || 'postgres',
-    database: process.env.DB_DATABASE || 'racha_do_mes',
+    database: process.env.DB_DATABASE || 'racha_mes',
     entities: [User, Bill, UserBill, Payment, ActualBalance, HistoryBalance],
     synchronize: true,
   });
@@ -30,12 +30,18 @@ export async function runSeed() {
     console.log('🌱 Iniciando seed...');
 
     // Limpar dados existentes
-    await queryRunner.manager.delete(HistoryBalance, {});
-    await queryRunner.manager.delete(ActualBalance, {});
-    await queryRunner.manager.delete(Payment, {});
-    await queryRunner.manager.delete(UserBill, {});
-    await queryRunner.manager.delete(Bill, {});
-    await queryRunner.manager.delete(User, {});
+    await queryRunner.query(
+      'TRUNCATE TABLE history_balance RESTART IDENTITY CASCADE',
+    );
+    await queryRunner.query(
+      'TRUNCATE TABLE actual_balance RESTART IDENTITY CASCADE',
+    );
+    await queryRunner.query('TRUNCATE TABLE payment RESTART IDENTITY CASCADE');
+    await queryRunner.query(
+      'TRUNCATE TABLE user_bills RESTART IDENTITY CASCADE',
+    );
+    await queryRunner.query('TRUNCATE TABLE bills RESTART IDENTITY CASCADE');
+    await queryRunner.query('TRUNCATE TABLE users RESTART IDENTITY CASCADE');
     console.log('🗑️  Dados antigos removidos');
 
     // Criar usuários
