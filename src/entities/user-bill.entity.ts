@@ -1,6 +1,19 @@
-import { Entity, Column, ManyToOne, JoinColumn, PrimaryColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  PrimaryColumn,
+  CreateDateColumn,
+} from 'typeorm';
 import { User } from './user.entity';
 import { Bill } from './bill.entity';
+
+export enum UserBillStatus {
+  PENDING = 'pending',
+  ACCEPTED = 'accepted',
+  REJECTED = 'rejected',
+}
 
 @Entity('user_bills')
 export class UserBill {
@@ -16,11 +29,22 @@ export class UserBill {
   @Column({ type: 'boolean', nullable: false, default: false })
   is_paid: boolean;
 
+  @Column({
+    type: 'enum',
+    enum: UserBillStatus,
+    default: UserBillStatus.PENDING,
+    nullable: false,
+  })
+  status: UserBillStatus;
+
+  @CreateDateColumn({ type: 'timestamptz' })
+  invited_at: Date;
+
   @ManyToOne(() => User, (user) => user.userBills)
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @ManyToOne(() => Bill, (bill) => bill.userBills)
+  @ManyToOne(() => Bill, (bill) => bill.userBills, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'bill_id' })
   bill: Bill;
 }

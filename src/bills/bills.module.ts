@@ -5,9 +5,10 @@ import { BillsController } from './bills.controller';
 import { Bill } from '../entities/bill.entity';
 import { UserBill } from '../entities/user-bill.entity';
 import { User } from '../entities/user.entity';
+import { BillValue } from '../entities/bill-value.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Bill, UserBill, User])],
+  imports: [TypeOrmModule.forFeature([Bill, UserBill, User, BillValue])],
   controllers: [BillsController],
   providers: [BillsService],
   exports: [BillsService],

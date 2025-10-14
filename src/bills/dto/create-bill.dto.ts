@@ -2,15 +2,17 @@ import { ApiProperty } from '@nestjs/swagger';
 import {
   IsString,
   IsNumber,
-  IsOptional,
-  IsDateString,
   IsInt,
   Min,
+  Max,
   IsArray,
   ValidateNested,
   ArrayMinSize,
+  IsEnum,
+  ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { BillType } from '../../entities/bill.entity';
 
 export class ParticipantDto {
   @ApiProperty({
@@ -40,31 +42,85 @@ export class CreateBillDto {
   descript: string;
 
   @ApiProperty({
-    description: 'Valor total da conta',
-    example: 1500.0,
+    description: 'Tipo da conta',
+    enum: BillType,
+    example: BillType.RECORRENTE,
   })
-  @IsNumber()
-  @Min(0)
-  value: number;
+  @IsEnum(BillType)
+  type: BillType;
 
   @ApiProperty({
-    description: 'Data de vencimento',
-    example: '2025-10-15',
-    required: false,
-  })
-  @IsDateString()
-  @IsOptional()
-  due_date?: string;
-
-  @ApiProperty({
-    description: 'Número de parcelas',
+    description: 'ID do usuário dono da conta',
     example: 1,
-    required: false,
   })
   @IsInt()
-  @IsOptional()
+  owner_id: number;
+
+  @ApiProperty({
+    description: 'Dia do mês de vencimento (1-31)',
+    example: 15,
+    minimum: 1,
+    maximum: 31,
+  })
+  @IsInt()
   @Min(1)
-  payment_number?: number;
+  @Max(31)
+  due_day: number;
+
+  @ApiProperty({
+    description:
+      'Valor total da conta (obrigatório apenas para contas parceladas)',
+    example: 1500.0,
+    required: false,
+  })
+  @ValidateIf((o) => o.type === BillType.PARCELADA)
+  @IsNumber()
+  @Min(0)
+  total_value?: number;
+
+  @ApiProperty({
+    description:
+      'Número de parcelas (obrigatório apenas para contas parceladas)',
+    example: 12,
+    required: false,
+  })
+  @ValidateIf((o) => o.type === BillType.PARCELADA)
+  @IsInt()
+  @Min(1)
+  installments?: number;
+
+  @ApiProperty({
+    description:
+      'Mês de início (1-12, obrigatório apenas para contas parceladas)',
+    example: 10,
+    required: false,
+  })
+  @ValidateIf((o) => o.type === BillType.PARCELADA)
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  start_month?: number;
+
+  @ApiProperty({
+    description: 'Ano de início (obrigatório apenas para contas parceladas)',
+    example: 2025,
+    required: false,
+  })
+  @ValidateIf((o) => o.type === BillType.PARCELADA)
+  @IsInt()
+  @Min(2000)
+  start_year?: number;
+
+  @ApiProperty({
+    description:
+      'Valor mensal (obrigatório apenas para contas recorrentes no mês atual)',
+    example: 150.0,
+    required: false,
+  })
+  @ValidateIf((o) => o.type === BillType.RECORRENTE)
+  @IsNumber()
+  @Min(0)
+  current_month_value?: number;
 
   @ApiProperty({
     description: 'Lista de participantes da conta',

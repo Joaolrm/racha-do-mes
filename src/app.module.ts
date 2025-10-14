@@ -12,6 +12,7 @@ import { UserBill } from './entities/user-bill.entity';
 import { Payment } from './entities/payment.entity';
 import { ActualBalance } from './entities/actual-balance.entity';
 import { HistoryBalance } from './entities/history-balance.entity';
+import { BillValue } from './entities/bill-value.entity';
 
 // Modules
 import { AuthModule } from './auth/auth.module';
@@ -35,7 +36,15 @@ import { JwtAuthGuard } from './auth/jwt-auth.guard';
       username: process.env.DB_USERNAME,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
-      entities: [User, Bill, UserBill, Payment, ActualBalance, HistoryBalance],
+      entities: [
+        User,
+        Bill,
+        UserBill,
+        Payment,
+        ActualBalance,
+        HistoryBalance,
+        BillValue,
+      ],
       synchronize: process.env.NODE_ENV !== 'production',
       logging: process.env.NODE_ENV === 'development',
     }),

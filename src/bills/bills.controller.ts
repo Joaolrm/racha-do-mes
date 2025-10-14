@@ -20,6 +20,8 @@ import {
 import { BillsService } from './bills.service';
 import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
+import { CreateBillValueDto } from './dto/create-bill-value.dto';
+import { AcceptInviteDto } from './dto/accept-invite.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @ApiTags('Contas')
@@ -96,5 +98,95 @@ export class BillsController {
     const isPaidBool = isPaid === 'true';
     await this.billsService.markAsPaid(billId, userId, isPaidBool);
     return { message: 'Status atualizado com sucesso' };
+  }
+
+  @Patch(':billId/invite/:userId')
+  @ApiOperation({ summary: 'Aceitar ou rejeitar convite de conta' })
+  @ApiResponse({ status: 200, description: 'Convite respondido com sucesso' })
+  @ApiResponse({ status: 404, description: 'Convite não encontrado' })
+  @ApiResponse({
+    status: 400,
+    description: 'Convite já foi respondido anteriormente',
+  })
+  async acceptInvite(
+    @Param('billId', ParseIntPipe) billId: number,
+    @Param('userId', ParseIntPipe) userId: number,
+    @Body() acceptInviteDto: AcceptInviteDto,
+  ) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+    await this.billsService.acceptInvite(
+      billId,
+      userId,
+      acceptInviteDto.status,
+    );
+    return { message: 'Convite respondido com sucesso' };
+  }
+
+  @Get('invites/pending/:userId')
+  @ApiOperation({ summary: 'Listar convites pendentes de um usuário' })
+  @ApiResponse({ status: 200, description: 'Lista de convites pendentes' })
+  async getPendingInvites(@Param('userId', ParseIntPipe) userId: number) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
+    return await this.billsService.getPendingInvites(userId);
+  }
+
+  @Post('values')
+  @ApiOperation({
+    summary: 'Criar valor mensal para conta recorrente',
+  })
+  @ApiResponse({ status: 201, description: 'Valor criado com sucesso' })
+  @ApiResponse({
+    status: 400,
+    description: 'Valor já existe ou conta não é recorrente',
+  })
+  async createBillValue(@Body() createBillValueDto: CreateBillValueDto) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
+    return await this.billsService.createBillValue(createBillValueDto);
+  }
+
+  @Patch('values/:id')
+  @ApiOperation({ summary: 'Atualizar valor mensal de conta recorrente' })
+  @ApiResponse({ status: 200, description: 'Valor atualizado com sucesso' })
+  @ApiResponse({ status: 404, description: 'Valor não encontrado' })
+  @ApiResponse({
+    status: 400,
+    description: 'Valores de contas parceladas não podem ser editados',
+  })
+  @ApiQuery({
+    name: 'value',
+    required: true,
+    type: Number,
+    description: 'Novo valor',
+  })
+  async updateBillValue(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('value') value: string,
+  ) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
+    return await this.billsService.updateBillValue(id, parseFloat(value));
+  }
+
+  @Get(':id/values')
+  @ApiOperation({ summary: 'Buscar valores mensais de uma conta' })
+  @ApiResponse({ status: 200, description: 'Lista de valores mensais' })
+  @ApiQuery({
+    name: 'month',
+    required: false,
+    type: Number,
+    description: 'Filtrar por mês (1-12)',
+  })
+  @ApiQuery({
+    name: 'year',
+    required: false,
+    type: Number,
+    description: 'Filtrar por ano',
+  })
+  async getBillValues(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('month', new ParseIntPipe({ optional: true })) month?: number,
+    @Query('year', new ParseIntPipe({ optional: true })) year?: number,
+  ) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
+    return await this.billsService.getBillValues(id, month, year);
   }
 }

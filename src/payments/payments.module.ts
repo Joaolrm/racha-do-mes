@@ -8,6 +8,7 @@ import { User } from '../entities/user.entity';
 import { UserBill } from '../entities/user-bill.entity';
 import { ActualBalance } from '../entities/actual-balance.entity';
 import { HistoryBalance } from '../entities/history-balance.entity';
+import { BillValue } from '../entities/bill-value.entity';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { HistoryBalance } from '../entities/history-balance.entity';
       UserBill,
       ActualBalance,
       HistoryBalance,
+      BillValue,
     ]),
   ],
   controllers: [PaymentsController],

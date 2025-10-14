@@ -4,13 +4,14 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, QueryRunner } from 'typeorm';
 import { Payment } from '../entities/payment.entity';
 import { Bill } from '../entities/bill.entity';
 import { User } from '../entities/user.entity';
 import { UserBill } from '../entities/user-bill.entity';
 import { ActualBalance } from '../entities/actual-balance.entity';
 import { HistoryBalance } from '../entities/history-balance.entity';
+import { BillValue } from '../entities/bill-value.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 
 @Injectable()
@@ -28,6 +29,8 @@ export class PaymentsService {
     private balanceRepository: Repository<ActualBalance>,
     @InjectRepository(HistoryBalance)
     private historyRepository: Repository<HistoryBalance>,
+    @InjectRepository(BillValue)
+    private billValueRepository: Repository<BillValue>,
     private dataSource: DataSource,
   ) {}
 
@@ -35,7 +38,7 @@ export class PaymentsService {
     userId: number,
     createPaymentDto: CreatePaymentDto,
   ): Promise<Payment> {
-    const { bill_id, payment_value, payed_at } = createPaymentDto;
+    const { bill_id, month, year, payment_value, payed_at } = createPaymentDto;
 
     // Verificar se a conta existe
     const bill = await this.billRepository.findOne({
@@ -45,6 +48,17 @@ export class PaymentsService {
 
     if (!bill) {
       throw new NotFoundException(`Conta com ID ${bill_id} não encontrada`);
+    }
+
+    // Buscar o valor mensal correspondente
+    const billValue = await this.billValueRepository.findOne({
+      where: { bill_id, month, year },
+    });
+
+    if (!billValue) {
+      throw new NotFoundException(
+        `Valor não encontrado para a conta no mês ${month}/${year}`,
+      );
     }
 
     // Verificar se o usuário existe
@@ -81,7 +95,8 @@ export class PaymentsService {
       await queryRunner.manager.save(bill);
 
       // Calcular quanto cada participante deve
-      const valuePerUser = bill.value / 100; // valor base para 1%
+      const billValueAmount = Number(billValue.value);
+      const valuePerUser = billValueAmount / 100; // valor base para 1%
 
       for (const participant of bill.userBills) {
         const participantShare = valuePerUser * participant.share_percentage;
@@ -97,7 +112,7 @@ export class PaymentsService {
                 const otherShare =
                   valuePerUser * otherParticipant.share_percentage;
                 const proportionalCredit =
-                  (otherShare / (bill.value - participantShare)) *
+                  (otherShare / (billValueAmount - participantShare)) *
                   amountPaidForOthers;
 
                 await this.updateBalance(
@@ -106,7 +121,7 @@ export class PaymentsService {
                   userId,
                   proportionalCredit,
                   bill.id,
-                  `Pagamento de ${bill.descript}`,
+                  `Pagamento de ${bill.descript} (${month}/${year})`,
                 );
               }
             }
@@ -125,7 +140,7 @@ export class PaymentsService {
   }
 
   private async updateBalance(
-    queryRunner: any,
+    queryRunner: QueryRunner,
     debtorId: number,
     creditorId: number,
     value: number,
