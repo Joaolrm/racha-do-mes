@@ -21,6 +21,8 @@ import { BillsService } from './bills.service';
 import { CreateBillDto } from './dto/create-bill.dto';
 import { AcceptInviteDto } from './dto/accept-invite.dto';
 import { UserMonthlyBillResponseDto } from './dto/user-monthly-bills-response.dto';
+import { UpdateBillInfoDto } from './dto/update-bill-info.dto';
+import { UpdateBillValueDto } from './dto/update-bill-value.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserFromJwt } from '../auth/jwt.strategy';
@@ -131,6 +133,96 @@ export class BillsController {
       acceptInviteDto.status,
     );
     return { message: 'Convite respondido com sucesso' };
+  }
+
+  @Patch(':billId')
+  @ApiOperation({
+    summary: 'Atualizar informações gerais da conta',
+    description:
+      'Permite atualizar a descrição e o valor total (apenas para contas parceladas). Apenas o dono pode atualizar.',
+  })
+  @ApiResponse({ status: 200, description: 'Conta atualizada com sucesso' })
+  @ApiResponse({ status: 404, description: 'Conta não encontrada' })
+  @ApiResponse({
+    status: 403,
+    description: 'Apenas o dono da conta pode atualizar',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Contas recorrentes não possuem valor total',
+  })
+  async updateBillInfo(
+    @CurrentUser() user: UserFromJwt,
+    @Param('billId', ParseIntPipe) billId: number,
+    @Body() updateBillInfoDto: UpdateBillInfoDto,
+  ) {
+    return await this.billsService.updateBillInfo(
+      billId,
+      user.userId,
+      updateBillInfoDto,
+    );
+  }
+
+  @Get(':billId/values')
+  @ApiOperation({
+    summary: 'Listar valores individuais de uma conta',
+    description:
+      'Retorna todos os valores (mês a mês) de uma conta específica. Pode filtrar por mês e ano.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de valores da conta',
+  })
+  @ApiResponse({ status: 404, description: 'Conta não encontrada' })
+  @ApiQuery({
+    name: 'month',
+    required: false,
+    type: Number,
+    description: 'Filtrar por mês (1-12)',
+  })
+  @ApiQuery({
+    name: 'year',
+    required: false,
+    type: Number,
+    description: 'Filtrar por ano',
+  })
+  async getBillValues(
+    @Param('billId', ParseIntPipe) billId: number,
+    @Query('month', new ParseIntPipe({ optional: true })) month?: number,
+    @Query('year', new ParseIntPipe({ optional: true })) year?: number,
+  ) {
+    return await this.billsService.getBillValues(billId, month, year);
+  }
+
+  @Patch(':billId/values/:month/:year')
+  @ApiOperation({
+    summary: 'Atualizar valor da conta para um mês específico',
+    description:
+      'Permite atualizar o valor de uma conta em um mês/ano específico. Apenas o dono pode atualizar.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Valor da conta atualizado com sucesso',
+  })
+  @ApiResponse({ status: 404, description: 'Conta ou valor não encontrado' })
+  @ApiResponse({
+    status: 403,
+    description: 'Apenas o dono da conta pode atualizar os valores',
+  })
+  async updateBillValue(
+    @CurrentUser() user: UserFromJwt,
+    @Param('billId', ParseIntPipe) billId: number,
+    @Param('month', ParseIntPipe) month: number,
+    @Param('year', ParseIntPipe) year: number,
+    @Body() updateBillValueDto: UpdateBillValueDto,
+  ) {
+    return await this.billsService.updateBillValue(
+      billId,
+      month,
+      year,
+      user.userId,
+      updateBillValueDto,
+    );
   }
 
   @Delete(':billId')

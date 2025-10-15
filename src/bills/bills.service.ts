@@ -13,6 +13,8 @@ import { BillValue } from '../entities/bill-value.entity';
 import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 import { CreateBillValueDto } from './dto/create-bill-value.dto';
+import { UpdateBillInfoDto } from './dto/update-bill-info.dto';
+import { UpdateBillValueDto } from './dto/update-bill-value.dto';
 
 @Injectable()
 export class BillsService {
@@ -327,30 +329,6 @@ export class BillsService {
     return await this.billValueRepository.save(billValue);
   }
 
-  async updateBillValue(
-    billValueId: number,
-    value: number,
-  ): Promise<BillValue> {
-    const billValue = await this.billValueRepository.findOne({
-      where: { id: billValueId },
-      relations: ['bill'],
-    });
-
-    if (!billValue) {
-      throw new NotFoundException('Valor mensal não encontrado');
-    }
-
-    // Verificar se a conta é recorrente (valores de contas parceladas não podem ser editados)
-    if (billValue.bill.type !== BillType.RECORRENTE) {
-      throw new BadRequestException(
-        'Valores de contas parceladas não podem ser editados individualmente',
-      );
-    }
-
-    billValue.value = value;
-    return await this.billValueRepository.save(billValue);
-  }
-
   async getBillValues(
     billId: number,
     month?: number,
@@ -487,5 +465,89 @@ export class BillsService {
 
     // Deletar a conta (cascade vai deletar userBills, billValues, etc)
     await this.billRepository.remove(bill);
+  }
+
+  async updateBillInfo(
+    billId: number,
+    userId: number,
+    updateBillInfoDto: UpdateBillInfoDto,
+  ): Promise<Bill> {
+    const bill = await this.billRepository.findOne({
+      where: { id: billId },
+      relations: ['owner', 'billValues'],
+    });
+
+    if (!bill) {
+      throw new NotFoundException(`Conta com ID ${billId} não encontrada`);
+    }
+
+    if (bill.owner_id !== userId) {
+      throw new ForbiddenException(
+        'Apenas o dono da conta pode atualizar suas informações',
+      );
+    }
+
+    if (updateBillInfoDto.descript !== undefined) {
+      bill.descript = updateBillInfoDto.descript;
+    }
+
+    if (updateBillInfoDto.total_value !== undefined) {
+      if (bill.type === BillType.RECORRENTE) {
+        throw new BadRequestException(
+          'Contas recorrentes não possuem valor total',
+        );
+      }
+
+      bill.total_value = updateBillInfoDto.total_value;
+
+      // Recalcular valores das parcelas
+      if (bill.installments && bill.billValues.length > 0) {
+        const newInstallmentValue =
+          updateBillInfoDto.total_value / bill.installments;
+
+        for (const billValue of bill.billValues) {
+          billValue.value = newInstallmentValue;
+          await this.billValueRepository.save(billValue);
+        }
+      }
+    }
+
+    return await this.billRepository.save(bill);
+  }
+
+  async updateBillValue(
+    billId: number,
+    month: number,
+    year: number,
+    userId: number,
+    updateBillValueDto: UpdateBillValueDto,
+  ): Promise<BillValue> {
+    const bill = await this.billRepository.findOne({
+      where: { id: billId },
+      relations: ['owner'],
+    });
+
+    if (!bill) {
+      throw new NotFoundException(`Conta com ID ${billId} não encontrada`);
+    }
+
+    if (bill.owner_id !== userId) {
+      throw new ForbiddenException(
+        'Apenas o dono da conta pode atualizar os valores',
+      );
+    }
+
+    const billValue = await this.billValueRepository.findOne({
+      where: { bill_id: billId, month, year },
+    });
+
+    if (!billValue) {
+      throw new NotFoundException(
+        `Valor da conta para ${month}/${year} não encontrado`,
+      );
+    }
+
+    billValue.value = updateBillValueDto.value;
+    return await this.billValueRepository.save(billValue);
   }
 }

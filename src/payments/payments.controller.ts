@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Param,
+  Put,
   Delete,
   ParseIntPipe,
   UseGuards,
@@ -28,6 +29,7 @@ import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
+import { UpdatePaymentDto } from './dto/update-payment.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserFromJwt } from '../auth/jwt.strategy';
@@ -139,11 +141,94 @@ export class PaymentsController {
     return this.paymentsService.findOne(id);
   }
 
+  @Put(':id')
+  @UseInterceptors(
+    FileInterceptor('receipt_photo', {
+      storage: diskStorage({
+        destination: './uploads/receipts',
+        filename: (_req, file, cb) => {
+          const uniqueSuffix =
+            Date.now() + '-' + Math.round(Math.random() * 1e9);
+          const ext = extname(file.originalname);
+          cb(null, `receipt-${uniqueSuffix}${ext}`);
+        },
+      }),
+      fileFilter: (_req, file, cb) => {
+        if (file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
+          cb(null, true);
+        } else {
+          cb(new Error('Apenas imagens são permitidas!') as any, false);
+        }
+      },
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Atualizar pagamento',
+    description:
+      'Substitui completamente os dados do pagamento. Valor e data são obrigatórios. Apenas o dono pode editar.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['payment_value', 'payed_at'],
+      properties: {
+        payment_value: {
+          type: 'number',
+          example: 800.0,
+          description: 'Valor do pagamento (obrigatório)',
+        },
+        payed_at: {
+          type: 'string',
+          example: '2025-10-12T18:00:00.000Z',
+          description: 'Data do pagamento (obrigatório)',
+        },
+        remove_receipt: {
+          type: 'boolean',
+          example: false,
+          description:
+            'Se true, remove a foto do comprovante (opcional, padrão: false)',
+        },
+        receipt_photo: {
+          type: 'string',
+          format: 'binary',
+          description:
+            'Nova foto do comprovante (opcional, substitui a anterior se existir)',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Pagamento atualizado com sucesso',
+  })
+  @ApiResponse({ status: 404, description: 'Pagamento não encontrado' })
+  @ApiResponse({
+    status: 400,
+    description: 'Você não pode editar pagamentos de outros usuários',
+  })
+  async update(
+    @CurrentUser() user: UserFromJwt,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updatePaymentDto: UpdatePaymentDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return await this.paymentsService.update(
+      id,
+      user.userId,
+      updatePaymentDto,
+      file?.path || undefined,
+    );
+  }
+
   @Delete(':id')
   @ApiOperation({
     summary: 'Remover pagamento',
     description:
-      'ATENÇÃO: Remover um pagamento não reverte automaticamente os saldos',
+      'ATENÇÃO: Remover um pagamento não reverte automaticamente os saldos. A foto do comprovante será deletada.',
   })
   @ApiResponse({ status: 200, description: 'Pagamento removido com sucesso' })
   @ApiResponse({ status: 404, description: 'Pagamento não encontrado' })

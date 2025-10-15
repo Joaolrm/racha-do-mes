@@ -13,6 +13,8 @@ import { ActualBalance } from '../entities/actual-balance.entity';
 import { HistoryBalance } from '../entities/history-balance.entity';
 import { BillValue } from '../entities/bill-value.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
+import { UpdatePaymentDto } from './dto/update-payment.dto';
+import { unlink } from 'fs/promises';
 
 @Injectable()
 export class PaymentsService {
@@ -279,8 +281,71 @@ export class PaymentsService {
     return payment;
   }
 
+  async update(
+    id: number,
+    userId: number,
+    updatePaymentDto: UpdatePaymentDto,
+    newReceiptPhotoPath?: string,
+  ): Promise<Payment> {
+    const payment = await this.paymentRepository.findOne({
+      where: { id },
+      relations: ['user', 'bill'],
+    });
+
+    if (!payment) {
+      throw new NotFoundException(`Pagamento com ID ${id} não encontrado`);
+    }
+
+    // Verificar se o usuário é o dono do pagamento
+    if (payment.user_id !== userId) {
+      throw new BadRequestException(
+        'Você não pode editar pagamentos de outros usuários',
+      );
+    }
+
+    // Atualizar valor e data (campos obrigatórios no PUT)
+    payment.payment_value = updatePaymentDto.payment_value;
+    payment.payed_at = new Date(updatePaymentDto.payed_at);
+
+    // Atualizar ou remover foto
+    if (updatePaymentDto.remove_receipt === true) {
+      // Remover foto existente
+      if (payment.receipt_photo) {
+        try {
+          await unlink(payment.receipt_photo);
+        } catch {
+          // Arquivo já não existe, ignorar erro
+        }
+        payment.receipt_photo = null;
+      }
+    } else if (newReceiptPhotoPath) {
+      // Remover foto antiga se houver
+      if (payment.receipt_photo) {
+        try {
+          await unlink(payment.receipt_photo);
+        } catch {
+          // Arquivo já não existe, ignorar erro
+        }
+      }
+      // Adicionar nova foto
+      payment.receipt_photo = newReceiptPhotoPath;
+    }
+
+    return await this.paymentRepository.save(payment);
+  }
+
   async remove(id: number): Promise<void> {
     const payment = await this.findOne(id);
+
+    // Remover foto se existir
+    if (payment.receipt_photo) {
+      try {
+        await unlink(payment.receipt_photo);
+      } catch {
+        // Arquivo já não existe, ignorar erro
+      }
+    }
+
     await this.paymentRepository.remove(payment);
   }
 }
