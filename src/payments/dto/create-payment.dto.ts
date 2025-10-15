@@ -1,11 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNumber, IsInt, IsDateString, Min, Max } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreatePaymentDto {
   @ApiProperty({
     description: 'ID da conta',
     example: 1,
   })
+  @Type(() => Number)
   @IsInt()
   bill_id: number;
 
@@ -13,6 +15,7 @@ export class CreatePaymentDto {
     description: 'Mês do pagamento (1-12)',
     example: 10,
   })
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(12)
@@ -22,6 +25,7 @@ export class CreatePaymentDto {
     description: 'Ano do pagamento',
     example: 2025,
   })
+  @Type(() => Number)
   @IsInt()
   @Min(2000)
   year: number;
@@ -30,6 +34,7 @@ export class CreatePaymentDto {
     description: 'Valor pago',
     example: 750.0,
   })
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   payment_value: number;

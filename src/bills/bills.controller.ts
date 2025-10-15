@@ -5,6 +5,7 @@ import {
   Body,
   Patch,
   Param,
+  Delete,
   ParseIntPipe,
   UseGuards,
   Query,
@@ -130,5 +131,25 @@ export class BillsController {
       acceptInviteDto.status,
     );
     return { message: 'Convite respondido com sucesso' };
+  }
+
+  @Delete(':billId')
+  @ApiOperation({
+    summary: 'Deletar uma conta',
+    description:
+      'Apenas o dono da conta pode deletá-la. Todos os dados relacionados serão removidos.',
+  })
+  @ApiResponse({ status: 200, description: 'Conta deletada com sucesso' })
+  @ApiResponse({ status: 404, description: 'Conta não encontrada' })
+  @ApiResponse({
+    status: 403,
+    description: 'Apenas o dono da conta pode deletá-la',
+  })
+  async deleteBill(
+    @CurrentUser() user: UserFromJwt,
+    @Param('billId', ParseIntPipe) billId: number,
+  ): Promise<{ message: string }> {
+    await this.billsService.deleteBill(billId, user.userId);
+    return { message: 'Conta deletada com sucesso' };
   }
 }

@@ -29,6 +29,9 @@ export class Payment {
   @Column({ type: 'timestamptz', nullable: false })
   payed_at: Date;
 
+  @Column({ type: 'text', nullable: true })
+  receipt_photo: string | null;
+
   @ManyToOne(() => User, (user) => user.payments)
   @JoinColumn({ name: 'user_id' })
   user: User;

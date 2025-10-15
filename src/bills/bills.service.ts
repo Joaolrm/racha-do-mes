@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, FindOptionsWhere } from 'typeorm';
@@ -466,5 +467,25 @@ export class BillsService {
     }
 
     return result;
+  }
+
+  async deleteBill(billId: number, userId: number): Promise<void> {
+    // Buscar a conta
+    const bill = await this.billRepository.findOne({
+      where: { id: billId },
+      relations: ['owner'],
+    });
+
+    if (!bill) {
+      throw new NotFoundException(`Conta com ID ${billId} não encontrada`);
+    }
+
+    // Verificar se o usuário é o dono da conta
+    if (bill.owner_id !== userId) {
+      throw new ForbiddenException('Apenas o dono da conta pode deletá-la');
+    }
+
+    // Deletar a conta (cascade vai deletar userBills, billValues, etc)
+    await this.billRepository.remove(bill);
   }
 }

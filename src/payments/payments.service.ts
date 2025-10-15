@@ -37,6 +37,7 @@ export class PaymentsService {
   async create(
     userId: number,
     createPaymentDto: CreatePaymentDto,
+    receiptPhotoPath?: string,
   ): Promise<Payment> {
     const { bill_id, month, year, payment_value, payed_at } = createPaymentDto;
 
@@ -87,6 +88,7 @@ export class PaymentsService {
         bill_id,
         payment_value,
         payed_at: new Date(payed_at),
+        receipt_photo: receiptPhotoPath || null,
       });
       const savedPayment = await queryRunner.manager.save(payment);
 
@@ -129,6 +131,16 @@ export class PaymentsService {
         }
       }
 
+      // Verificar se o usuário pagou o valor total devido e marcar como pago
+      await this.checkAndMarkAsPaid(
+        queryRunner,
+        userId,
+        bill_id,
+        month,
+        year,
+        billValue.id,
+      );
+
       await queryRunner.commitTransaction();
       return savedPayment;
     } catch (error) {
@@ -136,6 +148,59 @@ export class PaymentsService {
       throw error;
     } finally {
       await queryRunner.release();
+    }
+  }
+
+  private async checkAndMarkAsPaid(
+    queryRunner: QueryRunner,
+    userId: number,
+    billId: number,
+    month: number,
+    year: number,
+    billValueId: number,
+  ): Promise<void> {
+    // Buscar o UserBill do usuário
+    const userBill = await queryRunner.manager.findOne(UserBill, {
+      where: { user_id: userId, bill_id: billId },
+    });
+
+    if (!userBill) {
+      return;
+    }
+
+    // Buscar o valor da conta no mês
+    const billValue = await queryRunner.manager.findOne(BillValue, {
+      where: { id: billValueId },
+    });
+
+    if (!billValue) {
+      return;
+    }
+
+    // Calcular quanto o usuário deve pagar
+    const amountDue =
+      (Number(billValue.value) * userBill.share_percentage) / 100;
+
+    // Buscar todos os pagamentos do usuário para esta conta no mês/ano
+    const payments = await queryRunner.manager
+      .createQueryBuilder(Payment, 'payment')
+      .innerJoin(BillValue, 'billValue', 'payment.bill_id = billValue.bill_id')
+      .where('payment.user_id = :userId', { userId })
+      .andWhere('payment.bill_id = :billId', { billId })
+      .andWhere('billValue.month = :month', { month })
+      .andWhere('billValue.year = :year', { year })
+      .getMany();
+
+    // Somar o total pago
+    const totalPaid = payments.reduce(
+      (sum, p) => sum + Number(p.payment_value),
+      0,
+    );
+
+    // Se o total pago for >= ao valor devido, marcar como pago
+    if (totalPaid >= amountDue) {
+      userBill.is_paid = true;
+      await queryRunner.manager.save(userBill);
     }
   }
 
