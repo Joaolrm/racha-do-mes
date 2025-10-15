@@ -31,14 +31,22 @@ import { UserFromJwt } from '../auth/jwt.strategy';
 export class BillsController {
   constructor(private readonly billsService: BillsService) {}
   @Post()
-  @ApiOperation({ summary: 'Criar nova conta' })
+  @ApiOperation({
+    summary: 'Criar nova conta',
+    description:
+      'O usuário autenticado será automaticamente o dono da conta e deve estar entre os participantes',
+  })
   @ApiResponse({ status: 201, description: 'Conta criada com sucesso' })
   @ApiResponse({
     status: 400,
-    description: 'Porcentagens inválidas ou usuário não encontrado',
+    description:
+      'Porcentagens inválidas, usuário não encontrado ou dono não está entre os participantes',
   })
-  create(@Body() createBillDto: CreateBillDto) {
-    return this.billsService.create(createBillDto);
+  create(
+    @CurrentUser() user: UserFromJwt,
+    @Body() createBillDto: CreateBillDto,
+  ) {
+    return this.billsService.create(user.userId, createBillDto);
   }
   @Get()
   @ApiOperation({ summary: 'Listar todas as contas' })

@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { BillType } from '../../entities/bill.entity';
 
 export class UserMonthlyBillResponseDto {
   @ApiProperty({
@@ -12,6 +13,40 @@ export class UserMonthlyBillResponseDto {
     example: 'Aluguel do apartamento',
   })
   descript: string;
+
+  @ApiProperty({
+    description: 'Tipo da conta',
+    enum: BillType,
+    example: BillType.RECORRENTE,
+  })
+  type: BillType;
+
+  @ApiProperty({
+    description:
+      'Número da parcela atual (apenas para contas parceladas, null para recorrentes)',
+    example: 1,
+    required: false,
+    nullable: true,
+  })
+  installment_number: number | null;
+
+  @ApiProperty({
+    description:
+      'Total de parcelas (apenas para contas parceladas, null para recorrentes)',
+    example: 10,
+    required: false,
+    nullable: true,
+  })
+  total_installments: number | null;
+
+  @ApiProperty({
+    description:
+      'Parcela formatada (exemplo: "1/10", apenas para contas parceladas)',
+    example: '1/10',
+    required: false,
+    nullable: true,
+  })
+  installment_info: string | null;
 
   @ApiProperty({
     description: 'Data de vencimento',

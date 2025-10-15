@@ -50,13 +50,6 @@ export class CreateBillDto {
   type: BillType;
 
   @ApiProperty({
-    description: 'ID do usuário dono da conta',
-    example: 1,
-  })
-  @IsInt()
-  owner_id: number;
-
-  @ApiProperty({
     description: 'Dia do mês de vencimento (1-31)',
     example: 15,
     minimum: 1,

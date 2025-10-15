@@ -27,7 +27,7 @@ export class BillsService {
     private dataSource: DataSource,
   ) {}
 
-  async create(createBillDto: CreateBillDto): Promise<Bill> {
+  async create(ownerId: number, createBillDto: CreateBillDto): Promise<Bill> {
     const {
       participants,
       current_month_value,
@@ -54,6 +54,14 @@ export class BillsService {
       }
     }
 
+    // Validar que o dono está entre os participantes
+    const ownerIsParticipant = participants.some((p) => p.user_id === ownerId);
+    if (!ownerIsParticipant) {
+      throw new BadRequestException(
+        'O dono da conta deve estar entre os participantes',
+      );
+    }
+
     // Validar que a soma das porcentagens é 100
     const totalPercentage = participants.reduce(
       (sum, p) => sum + p.share_percentage,
@@ -77,7 +85,7 @@ export class BillsService {
 
     // Verificar se o dono existe
     const owner = await this.userRepository.findOne({
-      where: { id: billData.owner_id },
+      where: { id: ownerId },
     });
     if (!owner) {
       throw new NotFoundException('Usuário dono não encontrado');
@@ -92,6 +100,7 @@ export class BillsService {
       // Criar a conta
       const bill = this.billRepository.create({
         ...billData,
+        owner_id: ownerId,
         type,
         total_value: type === BillType.PARCELADA ? total_value : null,
         installments: type === BillType.PARCELADA ? installments : null,
@@ -102,7 +111,7 @@ export class BillsService {
 
       // Criar os participantes
       for (const participant of participants) {
-        const isOwner = participant.user_id === billData.owner_id;
+        const isOwner = participant.user_id === ownerId;
         const userBill = this.userBillRepository.create({
           user_id: participant.user_id,
           bill_id: savedBill.id,
@@ -383,6 +392,10 @@ export class BillsService {
     Array<{
       bill_id: number;
       descript: string;
+      type: BillType;
+      installment_number: number | null;
+      total_installments: number | null;
+      installment_info: string | null;
       due_date: Date;
       value: number;
       is_paid: boolean;
@@ -399,6 +412,10 @@ export class BillsService {
     const result: Array<{
       bill_id: number;
       descript: string;
+      type: BillType;
+      installment_number: number | null;
+      total_installments: number | null;
+      installment_info: string | null;
       due_date: Date;
       value: number;
       is_paid: boolean;
@@ -420,9 +437,26 @@ export class BillsService {
       // Calcular o valor que o usuário deve pagar
       const userValue = (billValue.value * userBill.share_percentage) / 100;
 
+      // Informações de parcela (apenas para contas parceladas)
+      const isInstallment = userBill.bill.type === BillType.PARCELADA;
+      const installmentNumber = isInstallment
+        ? billValue.installment_number
+        : null;
+      const totalInstallments = isInstallment
+        ? userBill.bill.installments
+        : null;
+      const installmentInfo =
+        isInstallment && installmentNumber && totalInstallments
+          ? `${installmentNumber}/${totalInstallments}`
+          : null;
+
       result.push({
         bill_id: userBill.bill.id,
         descript: userBill.bill.descript,
+        type: userBill.bill.type,
+        installment_number: installmentNumber,
+        total_installments: totalInstallments,
+        installment_info: installmentInfo,
         due_date: billValue.due_date,
         value: billValue.value,
         is_paid: userBill.is_paid,
