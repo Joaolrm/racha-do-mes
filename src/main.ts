@@ -8,7 +8,7 @@ async function bootstrap() {
 
   // Configurar CORS
   app.enableCors({
-    origin: process.env.FRONTEND_URL || '*',
+    origin: process.env.FRONTEND_URL,
     credentials: true,
   });
 
@@ -38,7 +38,7 @@ async function bootstrap() {
       'Consulta de saldos e histórico de transações',
     )
     .addBearerAuth()
-    .addServer(process.env.API_URL || 'http://localhost:3000', 'Servidor Local')
+    .addServer(process.env.API_URL, 'Servidor Local')
     .setContact(
       'João Luís Rosa de Moura',
       'https://github.com/Joaolrm',
@@ -58,7 +58,7 @@ async function bootstrap() {
     },
   });
 
-  const port = process.env.PORT || 3000;
+  const port = process.env.PORT;
   await app.listen(port);
 
   console.log(`🚀 Aplicação rodando em: http://localhost:${port}`);
@@ -66,4 +66,4 @@ async function bootstrap() {
     `📚 Documentação Swagger disponível em: http://localhost:${port}/api/docs`,
   );
 }
-bootstrap();
+void bootstrap();
