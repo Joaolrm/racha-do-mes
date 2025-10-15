@@ -374,4 +374,63 @@ export class BillsService {
       ],
     });
   }
+
+  async getUserMonthlyBills(
+    userId: number,
+    month: number,
+    year: number,
+  ): Promise<
+    Array<{
+      bill_id: number;
+      descript: string;
+      due_date: Date;
+      value: number;
+      is_paid: boolean;
+      share_percentage: number;
+      user_value: number;
+    }>
+  > {
+    // Buscar todas as contas do usuário
+    const userBills = await this.userBillRepository.find({
+      where: { user_id: userId, status: UserBillStatus.ACCEPTED },
+      relations: ['bill', 'bill.billValues'],
+    });
+
+    const result: Array<{
+      bill_id: number;
+      descript: string;
+      due_date: Date;
+      value: number;
+      is_paid: boolean;
+      share_percentage: number;
+      user_value: number;
+    }> = [];
+
+    for (const userBill of userBills) {
+      // Buscar o valor da conta para o mês/ano especificado
+      const billValue = userBill.bill.billValues.find(
+        (bv) => bv.month === month && bv.year === year,
+      );
+
+      // Se não houver valor para este mês, pular esta conta
+      if (!billValue) {
+        continue;
+      }
+
+      // Calcular o valor que o usuário deve pagar
+      const userValue = (billValue.value * userBill.share_percentage) / 100;
+
+      result.push({
+        bill_id: userBill.bill.id,
+        descript: userBill.bill.descript,
+        due_date: billValue.due_date,
+        value: billValue.value,
+        is_paid: userBill.is_paid,
+        share_percentage: userBill.share_percentage,
+        user_value: userValue,
+      });
+    }
+
+    return result;
+  }
 }

@@ -22,7 +22,10 @@ import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 import { CreateBillValueDto } from './dto/create-bill-value.dto';
 import { AcceptInviteDto } from './dto/accept-invite.dto';
+import { UserMonthlyBillResponseDto } from './dto/user-monthly-bills-response.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { UserFromJwt } from '../auth/jwt.strategy';
 
 @ApiTags('Contas')
 @ApiBearerAuth()
@@ -56,6 +59,44 @@ export class BillsController {
     }
     return this.billsService.findAll();
   }
+
+  @Get('my-bills/monthly')
+  @ApiOperation({
+    summary: 'Listar contas do usuário autenticado para um mês específico',
+    description:
+      'Retorna todas as contas do usuário autenticado no mês/ano especificado com valores, vencimentos e status de pagamento',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de contas do mês',
+    type: [UserMonthlyBillResponseDto],
+  })
+  @ApiQuery({
+    name: 'month',
+    required: true,
+    type: Number,
+    description: 'Mês (1-12)',
+    example: 10,
+  })
+  @ApiQuery({
+    name: 'year',
+    required: true,
+    type: Number,
+    description: 'Ano',
+    example: 2025,
+  })
+  async getMyMonthlyBills(
+    @CurrentUser() user: UserFromJwt,
+    @Query('month', ParseIntPipe) month: number,
+    @Query('year', ParseIntPipe) year: number,
+  ) {
+    return await this.billsService.getUserMonthlyBills(
+      user.userId,
+      month,
+      year,
+    );
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Buscar conta por ID' })
   @ApiResponse({ status: 200, description: 'Conta encontrada' })
@@ -113,7 +154,6 @@ export class BillsController {
     @Param('userId', ParseIntPipe) userId: number,
     @Body() acceptInviteDto: AcceptInviteDto,
   ) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     await this.billsService.acceptInvite(
       billId,
       userId,
@@ -126,7 +166,6 @@ export class BillsController {
   @ApiOperation({ summary: 'Listar convites pendentes de um usuário' })
   @ApiResponse({ status: 200, description: 'Lista de convites pendentes' })
   async getPendingInvites(@Param('userId', ParseIntPipe) userId: number) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
     return await this.billsService.getPendingInvites(userId);
   }
 
@@ -140,7 +179,6 @@ export class BillsController {
     description: 'Valor já existe ou conta não é recorrente',
   })
   async createBillValue(@Body() createBillValueDto: CreateBillValueDto) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
     return await this.billsService.createBillValue(createBillValueDto);
   }
 
@@ -162,7 +200,6 @@ export class BillsController {
     @Param('id', ParseIntPipe) id: number,
     @Query('value') value: string,
   ) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
     return await this.billsService.updateBillValue(id, parseFloat(value));
   }
 
@@ -186,7 +223,6 @@ export class BillsController {
     @Query('month', new ParseIntPipe({ optional: true })) month?: number,
     @Query('year', new ParseIntPipe({ optional: true })) year?: number,
   ) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
     return await this.billsService.getBillValues(id, month, year);
   }
 }
