@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, FindOptionsWhere } from 'typeorm';
 import { Bill, BillType } from '../entities/bill.entity';
 import { UserBill, UserBillStatus } from '../entities/user-bill.entity';
 import { User } from '../entities/user.entity';
@@ -226,10 +226,10 @@ export class BillsService {
         });
         await this.userBillRepository.save(userBill);
       }
+      delete updateBillDto.participants;
     }
 
-    const { participants, ...billData } = updateBillDto;
-    Object.assign(bill, billData);
+    Object.assign(bill, updateBillDto);
     await this.billRepository.save(bill);
 
     return await this.findOne(id);
@@ -346,7 +346,7 @@ export class BillsService {
     month?: number,
     year?: number,
   ): Promise<BillValue[]> {
-    const where: any = { bill_id: billId };
+    const where: FindOptionsWhere<BillValue> = { bill_id: billId };
 
     if (month !== undefined) {
       where.month = month;

@@ -18,6 +18,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserBalanceSummaryDto } from './dto/balance-response.dto';
 import { HistoryResponseDto } from './dto/history-response.dto';
+import { UserFromJwt } from '../auth/jwt.strategy';
 
 @ApiTags('Saldos e Histórico')
 @ApiBearerAuth()
@@ -37,7 +38,7 @@ export class BalanceController {
     description: 'Saldo do usuário',
     type: UserBalanceSummaryDto,
   })
-  getMyBalance(@CurrentUser() user: any) {
+  getMyBalance(@CurrentUser() user: UserFromJwt) {
     return this.balanceService.getUserBalance(user.userId);
   }
 
@@ -103,7 +104,7 @@ export class BalanceController {
       },
     },
   })
-  getMyChargeMessage(@CurrentUser() user: any) {
+  getMyChargeMessage(@CurrentUser() user: UserFromJwt) {
     return this.balanceService
       .generateChargeMessage(user.userId)
       .then((message) => ({ message }));

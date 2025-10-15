@@ -20,6 +20,7 @@ import { PaymentsService } from './payments.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { UserFromJwt } from '../auth/jwt.strategy';
 
 @ApiTags('Pagamentos')
 @ApiBearerAuth()
@@ -40,7 +41,10 @@ export class PaymentsController {
     description: 'Usuário não participa da conta',
   })
   @ApiResponse({ status: 404, description: 'Conta não encontrada' })
-  create(@CurrentUser() user: any, @Body() createPaymentDto: CreatePaymentDto) {
+  create(
+    @CurrentUser() user: UserFromJwt,
+    @Body() createPaymentDto: CreatePaymentDto,
+  ) {
     return this.paymentsService.create(user.userId, createPaymentDto);
   }
 
