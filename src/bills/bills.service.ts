@@ -404,13 +404,75 @@ export class BillsService {
 
     for (const userBill of userBills) {
       // Buscar o valor da conta para o mês/ano especificado
-      const billValue = userBill.bill.billValues.find(
+      let billValue = userBill.bill.billValues.find(
         (bv) => bv.month === month && bv.year === year,
       );
 
-      // Se não houver valor para este mês, pular esta conta
-      if (!billValue) {
-        continue;
+      // Para contas parceladas, se não houver valor para este mês, pular
+      if (userBill.bill.type === BillType.PARCELADA) {
+        if (!billValue) {
+          continue;
+        }
+      } else if (userBill.bill.type === BillType.RECORRENTE) {
+        // Para contas recorrentes, verificar se o mês solicitado é maior ou igual à primeira data
+        // Encontrar a primeira ocorrência (billValue mais antigo ou created_at da conta)
+        let firstDate: { year: number; month: number } | null = null;
+
+        if (userBill.bill.billValues.length > 0) {
+          // Ordenar billValues por ano e mês para encontrar o primeiro
+          const sortedBillValues = [...userBill.bill.billValues].sort(
+            (a, b) => {
+              if (a.year !== b.year) {
+                return a.year - b.year;
+              }
+              return a.month - b.month;
+            },
+          );
+          const firstBillValue = sortedBillValues[0];
+          firstDate = {
+            year: firstBillValue.year,
+            month: firstBillValue.month,
+          };
+        } else {
+          // Se não houver billValues, usar a data de criação da conta
+          const createdDate = new Date(userBill.bill.created_at);
+          firstDate = {
+            year: createdDate.getFullYear(),
+            month: createdDate.getMonth() + 1,
+          };
+        }
+
+        // Verificar se o mês solicitado é posterior à primeira data
+        if (firstDate) {
+          const requestedDateNum = year * 12 + month;
+          const firstDateNum = firstDate.year * 12 + firstDate.month;
+
+          // Se o mês solicitado for menor que a primeira data, pular
+          if (requestedDateNum < firstDateNum) {
+            continue;
+          }
+
+          // Se não houver billValue para este mês, criar um virtual com valor 0
+          // para que o usuário possa atribuir um valor depois
+          if (!billValue) {
+            const dueDate = new Date(year, month - 1, userBill.bill.due_day);
+            billValue = {
+              id: null,
+              bill_id: userBill.bill.id,
+              month: month,
+              year: year,
+              value: 0,
+              installment_number: null,
+              due_date: dueDate,
+              created_at: null,
+              updated_at: null,
+              bill: null,
+            } as any;
+          }
+        } else {
+          // Se não conseguir determinar a primeira data, pular
+          continue;
+        }
       }
 
       // Calcular o valor que o usuário deve pagar
