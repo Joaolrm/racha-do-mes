@@ -60,17 +60,35 @@ export class PaymentsController {
   @ApiOperation({
     summary: 'Registrar novo pagamento',
     description:
-      'Registra um pagamento e atualiza automaticamente os saldos entre os participantes. Pode incluir foto do comprovante.',
+      'Registra um pagamento e atualiza automaticamente os saldos entre os participantes. Pode incluir foto do comprovante. Para contas recorrentes, pode criar automaticamente o bill-value se não existir usando bill_id, month e year.',
   })
   @ApiBody({
     schema: {
       type: 'object',
-      required: ['bill_value_id', 'payment_value', 'payed_at'],
+      required: ['payment_value', 'payed_at'],
       properties: {
         bill_value_id: {
           type: 'integer',
           example: 1,
-          description: 'ID da parcela (BillValue)',
+          description:
+            'ID da parcela (BillValue). Obrigatório se bill_id, month e year não forem fornecidos.',
+        },
+        bill_id: {
+          type: 'integer',
+          example: 1,
+          description:
+            'ID da conta. Obrigatório se bill_value_id não for fornecido.',
+        },
+        month: {
+          type: 'integer',
+          example: 10,
+          description:
+            'Mês (1-12). Obrigatório se bill_value_id não for fornecido.',
+        },
+        year: {
+          type: 'integer',
+          example: 2025,
+          description: 'Ano. Obrigatório se bill_value_id não for fornecido.',
         },
         payment_value: { type: 'number', example: 750.0 },
         payed_at: { type: 'string', example: '2025-10-11T18:00:00.000Z' },

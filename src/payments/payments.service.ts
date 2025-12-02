@@ -40,30 +40,92 @@ export class PaymentsService {
     createPaymentDto: CreatePaymentDto,
     receiptPhoto?: { buffer: Buffer; mimetype: string },
   ): Promise<Payment> {
-    const { bill_value_id, payment_value, payed_at } = createPaymentDto;
+    const { bill_value_id, bill_id, month, year, payment_value, payed_at } =
+      createPaymentDto;
 
-    // Buscar o BillValue (parcela) correspondente
-    const billValue = await this.billValueRepository.findOne({
-      where: { id: bill_value_id },
-      relations: ['bill'],
-    });
-
-    if (!billValue) {
-      throw new NotFoundException(
-        `Parcela com ID ${bill_value_id} não encontrada`,
+    // Validar que temos bill_value_id OU (bill_id, month e year)
+    if (
+      !bill_value_id &&
+      (!bill_id || month === undefined || year === undefined)
+    ) {
+      throw new BadRequestException(
+        'É necessário fornecer bill_value_id OU (bill_id, month e year)',
       );
     }
 
-    const bill_id = billValue.bill_id;
+    let billValue: BillValue;
+    let bill_id_final: number;
+    let bill: Bill;
 
-    // Verificar se a conta existe
-    const bill = await this.billRepository.findOne({
-      where: { id: bill_id },
-      relations: ['userBills'],
-    });
+    // Se bill_value_id foi fornecido, buscar o BillValue existente
+    if (bill_value_id) {
+      billValue = await this.billValueRepository.findOne({
+        where: { id: bill_value_id },
+        relations: ['bill'],
+      });
 
-    if (!bill) {
-      throw new NotFoundException(`Conta com ID ${bill_id} não encontrada`);
+      if (!billValue) {
+        throw new NotFoundException(
+          `Parcela com ID ${bill_value_id} não encontrada`,
+        );
+      }
+
+      bill_id_final = billValue.bill_id;
+      bill = billValue.bill;
+    } else {
+      // Se não, vamos buscar ou criar o BillValue usando bill_id, month e year
+      // Já validamos que bill_id, month e year existem na validação anterior
+      if (!bill_id || month === undefined || year === undefined) {
+        throw new BadRequestException(
+          'bill_id, month e year são obrigatórios quando bill_value_id não é fornecido',
+        );
+      }
+
+      bill_id_final = bill_id;
+
+      // Verificar se a conta existe primeiro
+      bill = await this.billRepository.findOne({
+        where: { id: bill_id_final },
+        relations: ['userBills'],
+      });
+
+      if (!bill) {
+        throw new NotFoundException(
+          `Conta com ID ${bill_id_final} não encontrada`,
+        );
+      }
+
+      // Verificar se o usuário participa da conta
+      const userBill = bill.userBills.find((ub) => ub.user_id === userId);
+      if (!userBill) {
+        throw new BadRequestException('Usuário não participa desta conta');
+      }
+
+      // Buscar BillValue existente ou criar um novo
+      billValue = await this.billValueRepository.findOne({
+        where: {
+          bill_id: bill_id_final,
+          month: month,
+          year: year,
+        },
+        relations: ['bill'],
+      });
+
+      // Se não existir, será criado dentro da transação
+      if (!billValue) {
+        const dueDate = new Date(year, month - 1, bill.due_day);
+        billValue = this.billValueRepository.create({
+          bill_id: bill_id_final,
+          month: month,
+          year: year,
+          value: 0, // Valor inicial será 0, pode ser atualizado depois
+          installment_number: null,
+          due_date: dueDate,
+          is_paid: false,
+        });
+        // Garantir que a relação bill esteja disponível
+        billValue.bill = bill;
+      }
     }
 
     // Verificar se o usuário existe
@@ -75,7 +137,14 @@ export class PaymentsService {
       throw new NotFoundException(`Usuário com ID ${userId} não encontrado`);
     }
 
-    // Verificar se o usuário participa da conta
+    // Verificar se o usuário participa da conta (se ainda não foi verificado)
+    if (!bill.userBills) {
+      bill = await this.billRepository.findOne({
+        where: { id: bill_id_final },
+        relations: ['userBills'],
+      });
+    }
+
     const userBill = bill.userBills.find((ub) => ub.user_id === userId);
     if (!userBill) {
       throw new BadRequestException('Usuário não participa desta conta');
@@ -86,11 +155,16 @@ export class PaymentsService {
     await queryRunner.startTransaction();
 
     try {
+      // Se o billValue não tinha ID (foi criado agora), salvar primeiro
+      if (!billValue.id) {
+        billValue = await queryRunner.manager.save(BillValue, billValue);
+      }
+
       // Criar o pagamento
       const payment = this.paymentRepository.create({
         user_id: userId,
-        bill_id,
-        bill_value_id,
+        bill_id: bill_id_final,
+        bill_value_id: billValue.id,
         payment_value,
         payed_at: new Date(payed_at),
         receipt_photo: receiptPhoto?.buffer || null,
