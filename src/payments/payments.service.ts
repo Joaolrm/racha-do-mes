@@ -14,7 +14,6 @@ import { HistoryBalance } from '../entities/history-balance.entity';
 import { BillValue } from '../entities/bill-value.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { UpdatePaymentDto } from './dto/update-payment.dto';
-import { unlink } from 'fs/promises';
 
 @Injectable()
 export class PaymentsService {
@@ -39,9 +38,23 @@ export class PaymentsService {
   async create(
     userId: number,
     createPaymentDto: CreatePaymentDto,
-    receiptPhotoPath?: string,
+    receiptPhoto?: { buffer: Buffer; mimetype: string },
   ): Promise<Payment> {
-    const { bill_id, month, year, payment_value, payed_at } = createPaymentDto;
+    const { bill_value_id, payment_value, payed_at } = createPaymentDto;
+
+    // Buscar o BillValue (parcela) correspondente
+    const billValue = await this.billValueRepository.findOne({
+      where: { id: bill_value_id },
+      relations: ['bill'],
+    });
+
+    if (!billValue) {
+      throw new NotFoundException(
+        `Parcela com ID ${bill_value_id} não encontrada`,
+      );
+    }
+
+    const bill_id = billValue.bill_id;
 
     // Verificar se a conta existe
     const bill = await this.billRepository.findOne({
@@ -51,17 +64,6 @@ export class PaymentsService {
 
     if (!bill) {
       throw new NotFoundException(`Conta com ID ${bill_id} não encontrada`);
-    }
-
-    // Buscar o valor mensal correspondente
-    const billValue = await this.billValueRepository.findOne({
-      where: { bill_id, month, year },
-    });
-
-    if (!billValue) {
-      throw new NotFoundException(
-        `Valor não encontrado para a conta no mês ${month}/${year}`,
-      );
     }
 
     // Verificar se o usuário existe
@@ -88,9 +90,11 @@ export class PaymentsService {
       const payment = this.paymentRepository.create({
         user_id: userId,
         bill_id,
+        bill_value_id,
         payment_value,
         payed_at: new Date(payed_at),
-        receipt_photo: receiptPhotoPath || null,
+        receipt_photo: receiptPhoto?.buffer || null,
+        receipt_photo_mime: receiptPhoto?.mimetype || null,
       });
       const savedPayment = await queryRunner.manager.save(payment);
 
@@ -125,7 +129,7 @@ export class PaymentsService {
                   userId,
                   proportionalCredit,
                   bill.id,
-                  `Pagamento de ${bill.descript} (${month}/${year})`,
+                  `Pagamento de ${bill.descript} (${billValue.month}/${billValue.year})`,
                 );
               }
             }
@@ -134,14 +138,7 @@ export class PaymentsService {
       }
 
       // Verificar se o usuário pagou o valor total devido e marcar como pago
-      await this.checkAndMarkAsPaid(
-        queryRunner,
-        userId,
-        bill_id,
-        month,
-        year,
-        billValue.id,
-      );
+      await this.checkAndMarkAsPaid(queryRunner, userId, bill_id, billValue.id);
 
       await queryRunner.commitTransaction();
       return savedPayment;
@@ -157,20 +154,9 @@ export class PaymentsService {
     queryRunner: QueryRunner,
     userId: number,
     billId: number,
-    month: number,
-    year: number,
     billValueId: number,
   ): Promise<void> {
-    // Buscar o UserBill do usuário
-    const userBill = await queryRunner.manager.findOne(UserBill, {
-      where: { user_id: userId, bill_id: billId },
-    });
-
-    if (!userBill) {
-      return;
-    }
-
-    // Buscar o valor da conta no mês
+    // Buscar o valor da conta (parcela)
     const billValue = await queryRunner.manager.findOne(BillValue, {
       where: { id: billValueId },
     });
@@ -179,31 +165,29 @@ export class PaymentsService {
       return;
     }
 
-    // Calcular quanto o usuário deve pagar
-    const amountDue =
-      (Number(billValue.value) * userBill.share_percentage) / 100;
+    // Buscar TODOS os pagamentos para esta parcela (de todos os usuários)
+    const payments = await queryRunner.manager.find(Payment, {
+      where: {
+        bill_id: billId,
+        bill_value_id: billValueId,
+      },
+    });
 
-    // Buscar todos os pagamentos do usuário para esta conta no mês/ano
-    const payments = await queryRunner.manager
-      .createQueryBuilder(Payment, 'payment')
-      .innerJoin(BillValue, 'billValue', 'payment.bill_id = billValue.bill_id')
-      .where('payment.user_id = :userId', { userId })
-      .andWhere('payment.bill_id = :billId', { billId })
-      .andWhere('billValue.month = :month', { month })
-      .andWhere('billValue.year = :year', { year })
-      .getMany();
-
-    // Somar o total pago
+    // Somar o total pago por todos os usuários
     const totalPaid = payments.reduce(
       (sum, p) => sum + Number(p.payment_value),
       0,
     );
 
-    // Se o total pago for >= ao valor devido, marcar como pago
-    if (totalPaid >= amountDue) {
-      userBill.is_paid = true;
-      await queryRunner.manager.save(userBill);
+    // Se o total pago for >= ao valor total da conta, marcar como paga
+    // Se value = 0, só é pago se houver pagamento explícito
+    if (billValue.value === 0) {
+      billValue.is_paid = totalPaid > 0;
+    } else {
+      billValue.is_paid = totalPaid >= Number(billValue.value);
     }
+
+    await queryRunner.manager.save(billValue);
   }
 
   private async updateBalance(
@@ -285,7 +269,7 @@ export class PaymentsService {
     id: number,
     userId: number,
     updatePaymentDto: UpdatePaymentDto,
-    newReceiptPhotoPath?: string,
+    newReceiptPhoto?: { buffer: Buffer; mimetype: string },
   ): Promise<Payment> {
     const payment = await this.paymentRepository.findOne({
       where: { id },
@@ -310,25 +294,12 @@ export class PaymentsService {
     // Atualizar ou remover foto
     if (updatePaymentDto.remove_receipt === true) {
       // Remover foto existente
-      if (payment.receipt_photo) {
-        try {
-          await unlink(payment.receipt_photo);
-        } catch {
-          // Arquivo já não existe, ignorar erro
-        }
-        payment.receipt_photo = null;
-      }
-    } else if (newReceiptPhotoPath) {
-      // Remover foto antiga se houver
-      if (payment.receipt_photo) {
-        try {
-          await unlink(payment.receipt_photo);
-        } catch {
-          // Arquivo já não existe, ignorar erro
-        }
-      }
+      payment.receipt_photo = null;
+      payment.receipt_photo_mime = null;
+    } else if (newReceiptPhoto) {
       // Adicionar nova foto
-      payment.receipt_photo = newReceiptPhotoPath;
+      payment.receipt_photo = newReceiptPhoto.buffer;
+      payment.receipt_photo_mime = newReceiptPhoto.mimetype;
     }
 
     return await this.paymentRepository.save(payment);
@@ -336,16 +307,6 @@ export class PaymentsService {
 
   async remove(id: number): Promise<void> {
     const payment = await this.findOne(id);
-
-    // Remover foto se existir
-    if (payment.receipt_photo) {
-      try {
-        await unlink(payment.receipt_photo);
-      } catch {
-        // Arquivo já não existe, ignorar erro
-      }
-    }
-
     await this.paymentRepository.remove(payment);
   }
 }

@@ -25,8 +25,7 @@ import {
   ApiConsumes,
   ApiBody,
 } from '@nestjs/swagger';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { memoryStorage } from 'multer';
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { UpdatePaymentDto } from './dto/update-payment.dto';
@@ -44,15 +43,7 @@ export class PaymentsController {
   @Post()
   @UseInterceptors(
     FileInterceptor('receipt_photo', {
-      storage: diskStorage({
-        destination: './uploads/receipts',
-        filename: (_req, file, cb) => {
-          const uniqueSuffix =
-            Date.now() + '-' + Math.round(Math.random() * 1e9);
-          const ext = extname(file.originalname);
-          cb(null, `receipt-${uniqueSuffix}${ext}`);
-        },
-      }),
+      storage: memoryStorage(),
       fileFilter: (_req, file, cb) => {
         if (file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
           cb(null, true);
@@ -74,11 +65,13 @@ export class PaymentsController {
   @ApiBody({
     schema: {
       type: 'object',
-      required: ['bill_id', 'month', 'year', 'payment_value', 'payed_at'],
+      required: ['bill_value_id', 'payment_value', 'payed_at'],
       properties: {
-        bill_id: { type: 'integer', example: 1 },
-        month: { type: 'integer', example: 10 },
-        year: { type: 'integer', example: 2025 },
+        bill_value_id: {
+          type: 'integer',
+          example: 1,
+          description: 'ID da parcela (BillValue)',
+        },
         payment_value: { type: 'number', example: 750.0 },
         payed_at: { type: 'string', example: '2025-10-11T18:00:00.000Z' },
         receipt_photo: {
@@ -103,7 +96,9 @@ export class PaymentsController {
     return this.paymentsService.create(
       user.userId,
       createPaymentDto,
-      file?.path || undefined,
+      file?.buffer
+        ? { buffer: file.buffer, mimetype: file.mimetype }
+        : undefined,
     );
   }
 
@@ -144,15 +139,7 @@ export class PaymentsController {
   @Put(':id')
   @UseInterceptors(
     FileInterceptor('receipt_photo', {
-      storage: diskStorage({
-        destination: './uploads/receipts',
-        filename: (_req, file, cb) => {
-          const uniqueSuffix =
-            Date.now() + '-' + Math.round(Math.random() * 1e9);
-          const ext = extname(file.originalname);
-          cb(null, `receipt-${uniqueSuffix}${ext}`);
-        },
-      }),
+      storage: memoryStorage(),
       fileFilter: (_req, file, cb) => {
         if (file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
           cb(null, true);
@@ -220,7 +207,9 @@ export class PaymentsController {
       id,
       user.userId,
       updatePaymentDto,
-      file?.path || undefined,
+      file?.buffer
+        ? { buffer: file.buffer, mimetype: file.mimetype }
+        : undefined,
     );
   }
 
@@ -228,7 +217,7 @@ export class PaymentsController {
   @ApiOperation({
     summary: 'Remover pagamento',
     description:
-      'ATENÇÃO: Remover um pagamento não reverte automaticamente os saldos. A foto do comprovante será deletada.',
+      'ATENÇÃO: Remover um pagamento não reverte automaticamente os saldos.',
   })
   @ApiResponse({ status: 200, description: 'Pagamento removido com sucesso' })
   @ApiResponse({ status: 404, description: 'Pagamento não encontrado' })
@@ -262,6 +251,8 @@ export class PaymentsController {
       throw new NotFoundException('Este pagamento não possui comprovante');
     }
 
-    return res.sendFile(payment.receipt_photo, { root: '.' });
+    const mimeType = payment.receipt_photo_mime || 'image/jpeg';
+    res.setHeader('Content-Type', mimeType);
+    return res.send(payment.receipt_photo);
   }
 }

@@ -43,7 +43,10 @@ export class HistoryBalance {
   @JoinColumn({ name: 'borrower_user_id' })
   borrowerUser: User;
 
-  @ManyToOne(() => Bill, (bill) => bill.historyBalances, { nullable: true })
+  @ManyToOne(() => Bill, (bill) => bill.historyBalances, {
+    nullable: true,
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'bill_id' })
   bill: Bill;
 }

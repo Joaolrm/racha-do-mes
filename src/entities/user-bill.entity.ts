@@ -26,9 +26,6 @@ export class UserBill {
   @Column({ type: 'numeric', precision: 5, scale: 2, nullable: false })
   share_percentage: number;
 
-  @Column({ type: 'boolean', nullable: false, default: false })
-  is_paid: boolean;
-
   @Column({
     type: 'enum',
     enum: UserBillStatus,

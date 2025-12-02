@@ -3,11 +3,13 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
+  OneToMany,
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { Bill } from './bill.entity';
+import { Payment } from './payment.entity';
 
 @Entity('bill_values')
 export class BillValue {
@@ -42,6 +44,9 @@ export class BillValue {
   @Column({ type: 'date', nullable: false, comment: 'Data de vencimento' })
   due_date: Date;
 
+  @Column({ type: 'boolean', nullable: false, default: false })
+  is_paid: boolean;
+
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 
@@ -51,4 +56,7 @@ export class BillValue {
   @ManyToOne(() => Bill, (bill) => bill.billValues, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'bill_id' })
   bill: Bill;
+
+  @OneToMany(() => Payment, (payment) => payment.billValue)
+  payments: Payment[];
 }

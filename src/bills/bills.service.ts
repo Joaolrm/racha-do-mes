@@ -10,6 +10,7 @@ import { Bill, BillType } from '../entities/bill.entity';
 import { UserBill, UserBillStatus } from '../entities/user-bill.entity';
 import { User } from '../entities/user.entity';
 import { BillValue } from '../entities/bill-value.entity';
+import { Payment } from '../entities/payment.entity';
 import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 import { CreateBillValueDto } from './dto/create-bill-value.dto';
@@ -27,6 +28,8 @@ export class BillsService {
     private userRepository: Repository<User>,
     @InjectRepository(BillValue)
     private billValueRepository: Repository<BillValue>,
+    @InjectRepository(Payment)
+    private paymentRepository: Repository<Payment>,
     private dataSource: DataSource,
   ) {}
 
@@ -119,7 +122,6 @@ export class BillsService {
           user_id: participant.user_id,
           bill_id: savedBill.id,
           share_percentage: participant.share_percentage,
-          is_paid: false,
           // Dono já aceita automaticamente, outros ficam pendentes
           status: isOwner ? UserBillStatus.ACCEPTED : UserBillStatus.PENDING,
         });
@@ -230,11 +232,13 @@ export class BillsService {
       await this.userBillRepository.delete({ bill_id: id });
 
       for (const participant of updateBillDto.participants) {
+        const isOwner = participant.user_id === bill.owner_id;
         const userBill = this.userBillRepository.create({
           user_id: participant.user_id,
           bill_id: id,
           share_percentage: participant.share_percentage,
-          is_paid: false,
+          // Dono já aceita automaticamente, outros ficam pendentes
+          status: isOwner ? UserBillStatus.ACCEPTED : UserBillStatus.PENDING,
         });
         await this.userBillRepository.save(userBill);
       }
@@ -255,18 +259,42 @@ export class BillsService {
   async markAsPaid(
     billId: number,
     userId: number,
+    month: number,
+    year: number,
     isPaid: boolean,
   ): Promise<void> {
     const userBill = await this.userBillRepository.findOne({
       where: { bill_id: billId, user_id: userId },
+      relations: ['bill'],
     });
 
     if (!userBill) {
       throw new NotFoundException('Participante não encontrado nesta conta');
     }
 
-    userBill.is_paid = isPaid;
-    await this.userBillRepository.save(userBill);
+    // Buscar ou criar BillValue para este mês/ano
+    let billValue = await this.billValueRepository.findOne({
+      where: { bill_id: billId, month, year },
+    });
+
+    if (!billValue) {
+      // Criar BillValue se não existir (mesmo que seja zero)
+      const dueDate = new Date(year, month - 1, userBill.bill.due_day);
+      billValue = this.billValueRepository.create({
+        bill_id: billId,
+        month,
+        year,
+        value: 0, // Valor padrão quando criado via markAsPaid
+        installment_number: null,
+        due_date: dueDate,
+        is_paid: isPaid,
+      });
+      billValue = await this.billValueRepository.save(billValue);
+    } else {
+      // Atualizar is_paid do BillValue
+      billValue.is_paid = isPaid;
+      await this.billValueRepository.save(billValue);
+    }
   }
 
   async acceptInvite(
@@ -464,10 +492,11 @@ export class BillsService {
               value: 0,
               installment_number: null,
               due_date: dueDate,
+              is_paid: false, // Se não existe BillValue, não está pago
               created_at: null,
               updated_at: null,
               bill: null,
-            } as any;
+            } as BillValue;
           }
         } else {
           // Se não conseguir determinar a primeira data, pular
@@ -477,6 +506,9 @@ export class BillsService {
 
       // Calcular o valor que o usuário deve pagar
       const userValue = (billValue.value * userBill.share_percentage) / 100;
+
+      // is_paid vem direto do BillValue (se billValue é virtual, id é null, então is_paid = false)
+      const isPaid = billValue.id !== null ? billValue.is_paid : false;
 
       // Informações de parcela (apenas para contas parceladas)
       const isInstallment = userBill.bill.type === BillType.PARCELADA;
@@ -500,7 +532,7 @@ export class BillsService {
         installment_info: installmentInfo,
         due_date: billValue.due_date,
         value: billValue.value,
-        is_paid: userBill.is_paid,
+        is_paid: isPaid,
         share_percentage: userBill.share_percentage,
         user_value: userValue,
       });
@@ -599,17 +631,26 @@ export class BillsService {
       );
     }
 
-    const billValue = await this.billValueRepository.findOne({
+    let billValue = await this.billValueRepository.findOne({
       where: { bill_id: billId, month, year },
     });
 
     if (!billValue) {
-      throw new NotFoundException(
-        `Valor da conta para ${month}/${year} não encontrado`,
-      );
+      // Criar BillValue se não existir (quando o valor é editado pela primeira vez)
+      const dueDate = new Date(year, month - 1, bill.due_day);
+      billValue = this.billValueRepository.create({
+        bill_id: billId,
+        month,
+        year,
+        value: updateBillValueDto.value,
+        installment_number: null,
+        due_date: dueDate,
+        is_paid: false, // Quando cria novo valor, não está pago ainda
+      });
+    } else {
+      billValue.value = updateBillValueDto.value;
     }
 
-    billValue.value = updateBillValueDto.value;
     return await this.billValueRepository.save(billValue);
   }
 }
