@@ -35,6 +35,9 @@ export class HistoryBalance {
   @Column({ type: 'numeric', precision: 12, scale: 2, nullable: false })
   value: number;
 
+  @Column({ type: 'boolean', default: false, nullable: false })
+  is_paid: boolean;
+
   @ManyToOne(() => User, (user) => user.debtHistory)
   @JoinColumn({ name: 'debtor_user_id' })
   debtorUser: User;

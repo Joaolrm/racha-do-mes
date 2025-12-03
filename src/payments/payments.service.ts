@@ -299,6 +299,7 @@ export class PaymentsService {
       bill_id: billId,
       descript: description,
       value,
+      is_paid: false,
     });
     await queryRunner.manager.save(history);
   }

@@ -51,23 +51,6 @@ export class BillsController {
   ) {
     return this.billsService.create(user.userId, createBillDto);
   }
-  @Get()
-  @ApiOperation({ summary: 'Listar todas as contas' })
-  @ApiResponse({ status: 200, description: 'Lista de contas' })
-  @ApiQuery({
-    name: 'userId',
-    required: false,
-    description: 'Filtrar contas por usuário',
-  })
-  findAll(
-    @Query('userId', new ParseIntPipe({ optional: true })) userId?: number,
-  ) {
-    if (userId) {
-      return this.billsService.findByUser(userId);
-    }
-    return this.billsService.findAll();
-  }
-
   @Get('my-bills/monthly')
   @ApiOperation({
     summary: 'Listar contas do usuário autenticado para um mês específico',
