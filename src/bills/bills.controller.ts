@@ -196,15 +196,15 @@ export class BillsController {
 
   @Patch(':billId/values/:month/:year')
   @ApiOperation({
-    summary: 'Atualizar valor da conta para um mês específico',
+    summary: 'Atualizar ou criar valor da conta para um mês específico',
     description:
-      'Permite atualizar o valor de uma conta em um mês/ano específico. Apenas o dono pode atualizar.',
+      'Permite atualizar o valor de uma conta em um mês/ano específico. Se o bill-value não existir, ele será criado automaticamente. Apenas o dono pode atualizar.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Valor da conta atualizado com sucesso',
+    description: 'Valor da conta atualizado ou criado com sucesso',
   })
-  @ApiResponse({ status: 404, description: 'Conta ou valor não encontrado' })
+  @ApiResponse({ status: 404, description: 'Conta não encontrada' })
   @ApiResponse({
     status: 403,
     description: 'Apenas o dono da conta pode atualizar os valores',
