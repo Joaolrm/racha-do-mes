@@ -22,7 +22,7 @@ async function bootstrap() {
   );
 
   // Configurar Swagger
-  const config = new DocumentBuilder()
+  const configBuilder = new DocumentBuilder()
     .setTitle('Racha do Mês API')
     .setDescription(
       'API para gerenciamento de despesas compartilhadas. ' +
@@ -38,14 +38,25 @@ async function bootstrap() {
       'Consulta de saldos e histórico de transações',
     )
     .addBearerAuth()
-    .addServer(process.env.API_URL, 'Servidor Local')
     .setContact(
       'João Luís Rosa de Moura',
       'https://github.com/Joaolrm',
       'jlluismr86@gmail.com',
     )
-    .setLicense('MIT', 'https://opensource.org/licenses/MIT')
-    .build();
+    .setLicense('MIT', 'https://opensource.org/licenses/MIT');
+
+  // Adicionar servidores baseado no ambiente
+  if (process.env.API_URL) {
+    configBuilder.addServer(process.env.API_URL, 'Servidor de Produção');
+  }
+  if (process.env.NODE_ENV !== 'production') {
+    configBuilder.addServer(
+      'http://localhost:' + (process.env.PORT || 3000),
+      'Servidor Local',
+    );
+  }
+
+  const config = configBuilder.build();
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document, {
